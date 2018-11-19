@@ -5,20 +5,29 @@ LABEL maintainer="Dave Conroy (dave at tiredofit dot ca)"
    ENV ENABLE_CRON=FALSE \
        ENABLE_SMTP=FALSE
 
+RUN apk add --no-cache tzdata bash ca-certificates && \
+    update-ca-certificates
+
 ENV INFLUXDB_VERSION 1.7.1
-RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" && \
-    case "${dpkgArch##*-}" in \
-      amd64) ARCH='amd64';; \
-      arm64) ARCH='arm64';; \
-      armhf) ARCH='armhf';; \
-      armel) ARCH='armel';; \
-      *)     echo "Unsupported architecture: ${dpkgArch}"; exit 1;; \
-    esac && \
-    wget --no-verbose https://dl.influxdata.com/influxdb/releases/influxdb_${INFLUXDB_VERSION}_${ARCH}.deb.asc && \
-    wget --no-verbose https://dl.influxdata.com/influxdb/releases/influxdb_${INFLUXDB_VERSION}_${ARCH}.deb && \
-    gpg --batch --verify influxdb_${INFLUXDB_VERSION}_${ARCH}.deb.asc influxdb_${INFLUXDB_VERSION}_${ARCH}.deb && \
-    dpkg -i influxdb_${INFLUXDB_VERSION}_${ARCH}.deb && \
-    rm -f influxdb_${INFLUXDB_VERSION}_${ARCH}.deb*
+RUN set -ex && \
+    apk add --no-cache --virtual .build-deps wget gnupg tar && \
+    for key in \
+        05CE15085FC09D18E99EFB22684A14CF2582E0C5 ; \
+    do \
+        gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$key" || \
+        gpg --keyserver pgp.mit.edu --recv-keys "$key" || \
+        gpg --keyserver keyserver.pgp.com --recv-keys "$key" ; \
+    done && \
+    wget --no-verbose https://dl.influxdata.com/influxdb/releases/influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz.asc && \
+    wget --no-verbose https://dl.influxdata.com/influxdb/releases/influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz && \
+    gpg --batch --verify influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz.asc influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz && \
+    mkdir -p /usr/src && \
+    tar -C /usr/src -xzf influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz && \
+    rm -f /usr/src/influxdb-*/influxdb.conf && \
+    chmod +x /usr/src/influxdb-*/* && \
+    cp -a /usr/src/influxdb-*/* /usr/bin/ && \
+    rm -rf *.tar.gz* /usr/src /root/.gnupg && \
+    apk del .build-deps
 
 ### Dependencies
    RUN set -ex && \
